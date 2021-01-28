@@ -8,6 +8,6 @@
 #ifndef INC_PART1_H_
 #define INC_PART1_H_
 
-unsigned int kalman(unsigned int *, float);
+unsigned int kalman(struct KalmanFilter*, float);
 
 #endif /* INC_PART1_H_ */

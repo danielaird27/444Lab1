@@ -14,7 +14,7 @@ kalman:
 	//s6 -> used for intermediate in math
 
 	//CALLEE-SAVE CONVENTION
-	vpush {s1-s6, lr}
+	vpush {s1-s6}
 
 	vldr s1, [r0] //q
 	vldr s2, [r0, #4] //r
@@ -37,12 +37,12 @@ kalman:
 	vstr s3, [r0, #8] //Store new x
 
 	//p = (1-k)p
-	vmov s6, #1
+	vmov s6, #1.0
 	vsub.f32 s6, s6, s5
 	vmul.f32 s4, s6, s4
 	vstr s4, [r0, #12] //Store new p
 
 	//CALLEE-SAVE CONVENTION
-	vpop {s1-s6, lr}
+	vpop {s1-s6}
 
 	bx lr
