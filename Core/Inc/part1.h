@@ -8,6 +8,11 @@
 #ifndef INC_PART1_H_
 #define INC_PART1_H_
 
-unsigned int kalman(struct KalmanFilter*, float);
+/*
+ * Kalman Filtering function
+ * Returns 0 if successful
+ * Returns -1 if unsuccessful
+ */
+int kalman(struct KalmanFilter*, float);
 
 #endif /* INC_PART1_H_ */

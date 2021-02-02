@@ -113,7 +113,8 @@ int main(void)
 
     /* USER CODE BEGIN 3 */
 	  if (array_size > 0) {
-		  kalman(&filter, array[cnt]);
+		  int result = kalman(&filter, array[cnt]);
+		  printf('%i', result);
 		  cnt++;
 		  array_size--;
 

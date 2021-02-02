@@ -42,7 +42,19 @@ kalman:
 	vmul.f32 s4, s6, s4
 	vstr s4, [r0, #12] //Store new p
 
+	//Check if errors occurred
+	vmrs r1, fpscr
+	and r1, r1, 0x0000001F
+	cmp r1, #0
+	bgt error
+
 	//CALLEE-SAVE CONVENTION
 	vpop {s1-s6}
+	mov r0, #0
+	bx lr
 
+error:
+	//Return -1
+	mov r0, #-1
+	vpop {s1-s6}
 	bx lr
