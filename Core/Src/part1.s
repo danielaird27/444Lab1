@@ -1,9 +1,15 @@
 .syntax unified
 
 
-.global kalman
+.global kalmanASS
 
-kalman:
+kalmanASS:
+	/*
+	 * Returns 0 in r0 if successful
+	 * Returns -1 in r0 if unsuccessful (overflow,underflow, division by zero...)
+	 */
+
+
 	//r0 -> pointer to the struct, also is the pointer to q since that is the first float in the struct
 	//s0 -> measurement float
 	//s1 -> q
@@ -44,7 +50,7 @@ kalman:
 
 	//Check if errors occurred
 	vmrs r1, fpscr
-	and r1, r1, 0x0000001F
+	and r1, r1, 0x0000000F
 	cmp r1, #0
 	bgt error
 

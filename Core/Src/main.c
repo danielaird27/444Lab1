@@ -22,7 +22,11 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
+#include <math.h>
+#include <time.h>
 
+#define ARM_MATH_CM4
+#include <arm_math.h>
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -32,7 +36,7 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-#define TEST_ARRAY {10.4915760032, 10.1349974709, 9.53992591829, 9.60311878706, 10.4858891793, 10.1104642352, 9.51066931906, 9.75755656493, 9.82154078273, 10.2906541933, 10.4861328671, 9.57321181356, 9.70882714139, 10.4359069357, 9.70644021369, 10.2709894039, 10.0823149505, 10.2954563443, 9.57130449017, 9.66832136479, 10.4521677502, 10.4287240667, 10.1833650752, 10.0066049721, 10.3279461634, 10.4767210803, 10.3790964606, 10.1937408814, 10.0318963522, 10.4939180917, 10.2381858895, 9.59703103024, 9.62757986516, 10.1816981174, 9.65703773168, 10.3905666599, 10.0941977598, 9.93515274393, 9.71017053437, 10.0303874259, 10.0173504397, 9.69022731474, 9.73902896102, 9.52524419732, 10.3270730526, 9.54695650657, 10.3573960542, 9.88773266876, 10.1685038683, 10.1683694089, 9.88406620159, 10.3290065898, 10.2547227265, 10.4733422906, 10.0133952458, 10.4205693583, 9.71335255372, 9.89061396699, 10.1652744131, 10.2580948608, 10.3465431058, 9.98446410493, 9.79376005657, 10.202518901, 9.83867150985, 9.89532986869, 10.2885062658, 9.97748768804, 10.0403923759, 10.1538911808, 9.78303667556, 9.72420149909, 9.59117495073, 10.1716116012, 10.2015818969, 9.90650056596, 10.3251329834, 10.4550120431, 10.4925749165, 10.1548177178, 9.60547133785, 10.4644672766, 10.2326496615, 10.2279703226, 10.3535284606, 10.2437410625, 10.3851531317, 9.90784804928, 9.98208344925, 9.52778805729, 9.69323876912, 9.92987312087, 9.73938925207, 9.60543743477, 9.79600805462, 10.4950988486, 10.2814361401, 9.7985283333, 9.6287888922, 10.4491538991, 9.5799256668}
+
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -50,17 +54,269 @@
 void SystemClock_Config(void);
 /* USER CODE BEGIN PFP */
 
+
+
+
+
+
+#define TEST_ARRAY {10.4915760032, 10.1349974709, 9.53992591829, 9.60311878706, 10.4858891793, 10.1104642352, 9.51066931906, 9.75755656493, 9.82154078273, 10.2906541933, 10.4861328671, 9.57321181356, 9.70882714139, 10.4359069357, 9.70644021369, 10.2709894039, 10.0823149505, 10.2954563443, 9.57130449017, 9.66832136479, 10.4521677502, 10.4287240667, 10.1833650752, 10.0066049721, 10.3279461634, 10.4767210803, 10.3790964606, 10.1937408814, 10.0318963522, 10.4939180917, 10.2381858895, 9.59703103024, 9.62757986516, 10.1816981174, 9.65703773168, 10.3905666599, 10.0941977598, 9.93515274393, 9.71017053437, 10.0303874259, 10.0173504397, 9.69022731474, 9.73902896102, 9.52524419732, 10.3270730526, 9.54695650657, 10.3573960542, 9.88773266876, 10.1685038683, 10.1683694089, 9.88406620159, 10.3290065898, 10.2547227265, 10.4733422906, 10.0133952458, 10.4205693583, 9.71335255372, 9.89061396699, 10.1652744131, 10.2580948608, 10.3465431058, 9.98446410493, 9.79376005657, 10.202518901, 9.83867150985, 9.89532986869, 10.2885062658, 9.97748768804, 10.0403923759, 10.1538911808, 9.78303667556, 9.72420149909, 9.59117495073, 10.1716116012, 10.2015818969, 9.90650056596, 10.3251329834, 10.4550120431, 10.4925749165, 10.1548177178, 9.60547133785, 10.4644672766, 10.2326496615, 10.2279703226, 10.3535284606, 10.2437410625, 10.3851531317, 9.90784804928, 9.98208344925, 9.52778805729, 9.69323876912, 9.92987312087, 9.73938925207, 9.60543743477, 9.79600805462, 10.4950988486, 10.2814361401, 9.7985283333, 9.6287888922, 10.4491538991, 9.5799256668}
+
+typedef struct kalman_state{
+    float q; //process noise covariance
+    float r; //measurement noise covariance
+    float x; //estimated value
+    float p; //estimation error covariance
+    float k; // adaptive Kalman filter gain
+}kalman_state;
+
+/*
+ * Wrapper function for testing
+ */
+int Kalmanfilter(float* InputArray, float* OutputArray, kalman_state* kstate, int Length);
+
+/*
+ * Assembly update function
+ * Returns 0 if success
+ * Returns -1 if not success (overflow, underflow, division by zero...)
+ */
+extern int kalmanASS(kalman_state* kstate, float);
+
+/*
+ * C update function
+ * Returns 0 if success
+ * Returns -1 if not success (overflow, underflow, division by zero...)
+ */
+int kalmanC(kalman_state* kstate, float measurement);
+
+/*
+ * Math Functions for statistical analysis
+ */
+float* subtraction(float* differences, float* InputArray, float* OutputArray ,int Length);
+float standardDeviation(float* differences, float Length);
+float correlation(float* InputArray, float* OutputArray, int Length);
+float convolution(float* InputArray, float* OutputArray, int Length);
+
+
+
+
+
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
-struct KalmanFilter {
-	  float q;
-	  float r;
-	  float x;
-	  float p;
-	  float k;
-};
+
+
+
+
+
+int Kalmanfilter(float* InputArray, float* OutputArray, kalman_state* kstate, int Length) {
+
+	/*------------------------------------------------------------------------------------------
+	 * Generating outputs with assembly + calculating with C------------------------------------
+	 ------------------------------------------------------------------------------------------*/
+	int result;
+	// Create the output array with the assembly function
+	clock_t start = clock(); //Measure time
+	for(int position = 0; position < Length; position++){
+		result = kalmanASS(kstate, InputArray[position]);
+        OutputArray[position] = kstate->x;
+    }
+
+	if (result == -1) {
+		return result;
+	}
+
+	 // Subtraction
+	float differences[Length];
+	subtraction(differences, InputArray, OutputArray, Length);
+
+	// Standard Deviation
+	float standardDeviationValue;
+	standardDeviationValue = standardDeviation(differences, Length);
+
+	// Correlation
+	float correlationCoefficient;
+	correlationCoefficient = correlation(InputArray, OutputArray, Length);
+
+	// Convolution
+	float convolutionValue;
+	convolutionValue = convolution(InputArray, OutputArray, Length);
+
+	clock_t end = clock(); //Measure time
+	double time_spent1 = ((double)(end - start))/(double)CLOCKS_PER_SEC;
+	//------------------------------------------------------------------------------------------
+
+
+
+	/*------------------------------------------------------------------------------------------
+	 * Generating outputs with C + calculating with C-------------------------------------------
+	 -------------------------------------------------------------------------------------------*/
+	// Create the output array with the assembly function
+	start = clock(); //Measure time
+	for(int position = 0; position < Length; position++){
+		result = kalmanC(kstate, InputArray[position]);
+		OutputArray[position] = kstate->x;
+	}
+
+	if (result == -1) {
+		return result;
+	}
+
+
+
+	 // Subtraction
+	subtraction(differences, InputArray, OutputArray, Length);
+
+	// Standard Deviation
+	standardDeviationValue = standardDeviation(differences, Length);
+
+	// Correlation
+	correlationCoefficient = correlation(InputArray, OutputArray, Length);
+
+	// Convolution
+	convolutionValue = convolution(InputArray, OutputArray, Length);
+
+	end = clock(); //Measure time
+	double time_spent2 = ((double)(end - start))/(double)CLOCKS_PER_SEC;
+	//------------------------------------------------------------------------------------------
+
+
+
+	/*------------------------------------------------------------------------------------------
+	 * Generating outputs with assembly + calculating with CMSIS-DSP----------------------------
+	 ------------------------------------------------------------------------------------------*/
+	// Create the output array with the assembly function
+	start = clock(); //Measure time
+	for(int position = 0; position < Length; position++){
+		int result = kalmanASS(kstate, InputArray[position]);
+		OutputArray[position] = kstate->x;
+	}
+
+	//Subtraction
+	arm_sub_f32(InputArray, OutputArray, differences, Length);
+
+	//Mean
+	float mean;
+	arm_mean_f32(differences, Length, &mean);
+
+	//Standard Deviation
+	float stddev;
+	arm_std_f32(differences, Length, &stddev);
+
+	//Correlation
+	float corr[(2*Length - 1)];
+	arm_correlate_f32(InputArray, Length, OutputArray, Length, &corr);
+
+	//Convolution
+	float conv[(2*Length - 1)];
+	arm_conv_f32(InputArray, Length, OutputArray, Length, &conv);
+
+
+	end = clock(); //Measure time
+	double time_spent3 = ((double)(end - start))/(double)CLOCKS_PER_SEC;
+	//------------------------------------------------------------------------------------------
+
+
+
+    return result;
+}
+
+
+
+
+
+int kalmanC(kalman_state* kstate, float measurement){
+	//Typical Kalman Filter update
+	kstate->p = kstate->p + kstate->q;
+	kstate->k = kstate->p/(kstate->p + kstate->r);
+	kstate->x = kstate->x + kstate->k * (measurement - kstate->x);
+	kstate->p = (1 - kstate->k) * kstate->p;
+
+	//Checking for NaN's
+	if isnan(kstate->p) {
+		return -1;
+	}
+	else if isnan(kstate->k) {
+		return -1;
+	}
+	else if isnan(kstate->x) {
+		return -1;
+	}
+	else if isnan(kstate->r) {
+		return -1;
+	}
+	else {
+		return 0;
+	}
+}
+
+
+
+
+
+float* subtraction(float* differences, float* InputArray, float* OutputArray ,int Length){
+    for(int position = 0; position < Length; position++){
+        float difference = InputArray[position] - OutputArray[position];
+        differences[position] = difference;
+    }
+    return differences;
+}
+
+float standardDeviation(float* differences, float Length){
+    float mean = 0;
+    for(int position = 0; position < Length; position++){
+        mean += differences[position]/Length;
+    }
+    float sum = 0;
+    for(int position = 0; position < Length; position++){
+        sum += pow((differences[position] - mean), 2);
+    }
+    float standardDeviation = sqrt(sum/Length);
+    return standardDeviation;
+}
+
+float correlation(float* InputArray, float* OutputArray, int Length){
+    float correlation = 0;
+    float inputMean = 0;
+    float outputMean = 0;
+    float sum1 = 0;
+    float sum2 = 0;
+    float sum3 = 0;
+    float sum4 = 0;
+
+    for(int position = 0; position < Length; position++){
+        inputMean += InputArray[position]/Length;
+    }
+    for(int position = 0; position < Length; position++){
+        outputMean += OutputArray[position]/Length;
+    }
+    for(int position = 0; position < Length; position++){
+        sum1 += (InputArray[position]-inputMean);
+    }
+    for(int position = 0; position < Length; position++){
+        sum2 += (OutputArray[position]-outputMean);
+    }
+    for(int position = 0; position < Length; position++){
+        sum3 += pow((InputArray[position]-inputMean),2);
+    }
+    for(int position = 0; position < Length; position++){
+        sum4 += pow((OutputArray[position]-outputMean),2);
+    }
+    return correlation = (sum1*sum2)/sqrt(sum3*sum4);
+}
+
+float convolution(float* InputArray, float* OutputArray, int Length){
+    float convolution = 0;
+    for(int position = 0; position < Length; position++){
+        convolution += InputArray[position]*OutputArray[position];
+    }
+    return convolution;
+}
+
+
+
+
+
 /* USER CODE END 0 */
 
 /**
@@ -91,15 +347,18 @@ int main(void)
 
   /* Initialize all configured peripherals */
   /* USER CODE BEGIN 2 */
-  struct KalmanFilter filter;
-  filter.k = 0.0;
-  filter.x = 0.0;
-  filter.p = 0.0;
-  filter.q = 0.0;
-  filter.r = 0.0;
-  float array[] = TEST_ARRAY;
-  int array_size = sizeof(array)/sizeof(float);
-  int cnt = 0;
+
+
+
+
+
+  kalman_state  kstate = { 0.1, 0.1, 5, 0.1, 0.0 };
+  float InputArray[] = TEST_ARRAY;
+  int Length = (int)sizeof(InputArray)/sizeof(float);
+  float OutputArray[Length];
+
+  int result = Kalmanfilter(InputArray, OutputArray, &kstate, Length);
+
 
 
 
@@ -112,13 +371,6 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-	  if (array_size > 0) {
-		  int result = kalman(&filter, array[cnt]);
-		  printf('%i', result);
-		  cnt++;
-		  array_size--;
-
-	  };
   }
   /* USER CODE END 3 */
 }
