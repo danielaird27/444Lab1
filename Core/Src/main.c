@@ -111,6 +111,17 @@ float convolution(float* InputArray, float* OutputArray, int Length);
 
 int Kalmanfilter(float* InputArray, float* OutputArray, kalman_state* kstate, int Length) {
 
+	/*
+	 * Kalmanfilter:
+	 * There are four parts to this function:
+	 * 		1. Generating outputs with assembly + statistical calculation with C
+	 * 		2. Generating outputs with C + statistical calculation with C
+	 * 		3. Generating outputs with assembly + statistical calculation with CMSIS-DSP library
+	 * 		4. Generating outputs with C + statistical calculation with CMSIS-DSP library
+	 *
+	 * The time values for each part are saved in time_spent1, time_spent2, time_spent3, and time_spent4
+	 */
+
 	/*------------------------------------------------------------------------------------------
 	 * Generating outputs with assembly + calculating with C------------------------------------
 	 ------------------------------------------------------------------------------------------*/
@@ -122,6 +133,7 @@ int Kalmanfilter(float* InputArray, float* OutputArray, kalman_state* kstate, in
         OutputArray[position] = kstate->x;
     }
 
+	//NaN detection - if there was a NaN in the output, result will be -1
 	if (result == -1) {
 		return result;
 	}
@@ -158,11 +170,10 @@ int Kalmanfilter(float* InputArray, float* OutputArray, kalman_state* kstate, in
 		OutputArray[position] = kstate->x;
 	}
 
+	//NaN detection - if there was a NaN in the output, result will be -1
 	if (result == -1) {
 		return result;
 	}
-
-
 
 	 // Subtraction
 	subtraction(differences, InputArray, OutputArray, Length);
@@ -192,6 +203,11 @@ int Kalmanfilter(float* InputArray, float* OutputArray, kalman_state* kstate, in
 		OutputArray[position] = kstate->x;
 	}
 
+	//NaN detection - if there was a NaN in the output, result will be -1
+	if (result == -1) {
+		return result;
+	}
+
 	//Subtraction
 	arm_sub_f32(InputArray, OutputArray, differences, Length);
 
@@ -218,8 +234,46 @@ int Kalmanfilter(float* InputArray, float* OutputArray, kalman_state* kstate, in
 
 
 
+	/*------------------------------------------------------------------------------------------
+	 * Generating outputs with C + calculating with CMSIS-DSP----------------------------
+	 ------------------------------------------------------------------------------------------*/
+	// Create the output array with the assembly function
+	start = clock(); //Measure time
+	for(int position = 0; position < Length; position++){
+		int result = kalmanASS(kstate, InputArray[position]);
+		OutputArray[position] = kstate->x;
+	}
+
+	//NaN detection - if there was a NaN in the output, result will be -1
+	if (result == -1) {
+		return result;
+	}
+
+	//Subtraction
+	arm_sub_f32(InputArray, OutputArray, differences, Length);
+
+	//Mean
+	arm_mean_f32(differences, Length, &mean);
+
+	//Standard Deviation
+	arm_std_f32(differences, Length, &stddev);
+
+	//Correlation
+	arm_correlate_f32(InputArray, Length, OutputArray, Length, &corr);
+
+	//Convolution
+	arm_conv_f32(InputArray, Length, OutputArray, Length, &conv);
+
+
+	end = clock(); //Measure time
+	double time_spent4 = ((double)(end - start))/(double)CLOCKS_PER_SEC;
+	//------------------------------------------------------------------------------------------
+
+
+
     return result;
 }
+
 
 
 
