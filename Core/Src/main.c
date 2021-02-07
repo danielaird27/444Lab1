@@ -131,7 +131,7 @@ int Kalmanfilter(float* InputArray, float* OutputArray, kalman_state* kstate, in
 
 	// Standard Deviation
 	float standardDeviationValue1;
-	standardDeviationValue1 = standardDeviation(differences, Length);
+	standardDeviationValue1 = standardDeviation(differences1, Length);
 
     // Correlation Vector
     float correlationArray1[Length];
@@ -167,7 +167,7 @@ int Kalmanfilter(float* InputArray, float* OutputArray, kalman_state* kstate, in
 
 	// Standard Deviation
 	float standardDeviationValue2;
-	standardDeviationValue2 = standardDeviation(differences, Length);
+	standardDeviationValue2 = standardDeviation(differences2, Length);
 
 	// Correlation
 	float correlationArray2[Length];
@@ -192,17 +192,18 @@ int Kalmanfilter(float* InputArray, float* OutputArray, kalman_state* kstate, in
 		int result = kalmanASS(kstate, InputArray[position]);
 		OutputArray[position] = kstate->x;
 	}
+	float differences3[Length];
 
 	//Subtraction
-	arm_sub_f32(InputArray, OutputArray, differences, Length);
+	arm_sub_f32(InputArray, OutputArray, differences3, Length);
 
 	//Mean
 	float mean;
-	arm_mean_f32(differences, Length, &mean);
+	arm_mean_f32(differences3, Length, &mean);
 
 	//Standard Deviation
 	float stddev;
-	arm_std_f32(differences, Length, &stddev);
+	arm_std_f32(differences3, Length, &stddev);
 
 	//Correlation
 	float corr[(2*Length - 1)];
