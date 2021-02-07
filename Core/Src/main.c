@@ -91,11 +91,14 @@ int kalmanC(kalman_state* kstate, float measurement);
 /*
  * Math Functions for statistical analysis
  */
+void updateFilter(kalman_state* kstate, float measurement);
 float* subtraction(float* differences, float* InputArray, float* OutputArray ,int Length);
 float standardDeviation(float* differences, float Length);
-float correlation(float* InputArray, float* OutputArray, int Length);
-float convolution(float* InputArray, float* OutputArray, int Length);
-
+float correlation(float* correlationArray, float* InputArray, float* OutputArray, int Length);
+float convolution(float* convolutionArray, float* InputArray, float* OutputArray, int Length);
+float mean(float* array, int Length);
+float summation(float* array, int Length, float mean);
+float summation2(float* array, int Length, float mean);
 
 
 
@@ -105,22 +108,7 @@ float convolution(float* InputArray, float* OutputArray, int Length);
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
 
-
-
-
-
 int Kalmanfilter(float* InputArray, float* OutputArray, kalman_state* kstate, int Length) {
-
-	/*
-	 * Kalmanfilter:
-	 * There are four parts to this function:
-	 * 		1. Generating outputs with assembly + statistical calculation with C
-	 * 		2. Generating outputs with C + statistical calculation with C
-	 * 		3. Generating outputs with assembly + statistical calculation with CMSIS-DSP library
-	 * 		4. Generating outputs with C + statistical calculation with CMSIS-DSP library
-	 *
-	 * The time values for each part are saved in time_spent1, time_spent2, time_spent3, and time_spent4
-	 */
 
 	/*------------------------------------------------------------------------------------------
 	 * Generating outputs with assembly + calculating with C------------------------------------
@@ -133,26 +121,25 @@ int Kalmanfilter(float* InputArray, float* OutputArray, kalman_state* kstate, in
         OutputArray[position] = kstate->x;
     }
 
-	//NaN detection - if there was a NaN in the output, result will be -1
 	if (result == -1) {
 		return result;
 	}
 
 	 // Subtraction
-	float differences[Length];
-	subtraction(differences, InputArray, OutputArray, Length);
+	float differences1[Length];
+	subtraction(differences1, InputArray, OutputArray, Length);
 
 	// Standard Deviation
-	float standardDeviationValue;
-	standardDeviationValue = standardDeviation(differences, Length);
+	float standardDeviationValue1;
+	standardDeviationValue1 = standardDeviation(differences, Length);
 
-	// Correlation
-	float correlationCoefficient;
-	correlationCoefficient = correlation(InputArray, OutputArray, Length);
+    // Correlation Vector
+    float correlationArray1[Length];
+    correlation(correlationArray1, InputArray, OutputArray, Length);
 
-	// Convolution
-	float convolutionValue;
-	convolutionValue = convolution(InputArray, OutputArray, Length);
+    // Convolution Vector
+    float convolutionArray1[Length];
+    convolution(convolutionArray1, InputArray, OutputArray, Length);
 
 	clock_t end = clock(); //Measure time
 	double time_spent1 = ((double)(end - start))/(double)CLOCKS_PER_SEC;
@@ -170,22 +157,25 @@ int Kalmanfilter(float* InputArray, float* OutputArray, kalman_state* kstate, in
 		OutputArray[position] = kstate->x;
 	}
 
-	//NaN detection - if there was a NaN in the output, result will be -1
 	if (result == -1) {
 		return result;
 	}
 
 	 // Subtraction
-	subtraction(differences, InputArray, OutputArray, Length);
+	float differences2[Length];
+	subtraction(differences2, InputArray, OutputArray, Length);
 
 	// Standard Deviation
-	standardDeviationValue = standardDeviation(differences, Length);
+	float standardDeviationValue2;
+	standardDeviationValue2 = standardDeviation(differences, Length);
 
 	// Correlation
-	correlationCoefficient = correlation(InputArray, OutputArray, Length);
+	float correlationArray2[Length];
+	correlation(correlationArray2, InputArray, OutputArray, Length);
 
-	// Convolution
-	convolutionValue = convolution(InputArray, OutputArray, Length);
+    // Convolution Vector
+    float convolutionArray2[Length];
+    convolution(convolutionArray2, InputArray, OutputArray, Length);
 
 	end = clock(); //Measure time
 	double time_spent2 = ((double)(end - start))/(double)CLOCKS_PER_SEC;
@@ -201,11 +191,6 @@ int Kalmanfilter(float* InputArray, float* OutputArray, kalman_state* kstate, in
 	for(int position = 0; position < Length; position++){
 		int result = kalmanASS(kstate, InputArray[position]);
 		OutputArray[position] = kstate->x;
-	}
-
-	//NaN detection - if there was a NaN in the output, result will be -1
-	if (result == -1) {
-		return result;
 	}
 
 	//Subtraction
@@ -232,52 +217,8 @@ int Kalmanfilter(float* InputArray, float* OutputArray, kalman_state* kstate, in
 	double time_spent3 = ((double)(end - start))/(double)CLOCKS_PER_SEC;
 	//------------------------------------------------------------------------------------------
 
-
-
-	/*------------------------------------------------------------------------------------------
-	 * Generating outputs with C + calculating with CMSIS-DSP----------------------------
-	 ------------------------------------------------------------------------------------------*/
-	// Create the output array with the assembly function
-	start = clock(); //Measure time
-	for(int position = 0; position < Length; position++){
-		int result = kalmanASS(kstate, InputArray[position]);
-		OutputArray[position] = kstate->x;
-	}
-
-	//NaN detection - if there was a NaN in the output, result will be -1
-	if (result == -1) {
-		return result;
-	}
-
-	//Subtraction
-	arm_sub_f32(InputArray, OutputArray, differences, Length);
-
-	//Mean
-	arm_mean_f32(differences, Length, &mean);
-
-	//Standard Deviation
-	arm_std_f32(differences, Length, &stddev);
-
-	//Correlation
-	arm_correlate_f32(InputArray, Length, OutputArray, Length, &corr);
-
-	//Convolution
-	arm_conv_f32(InputArray, Length, OutputArray, Length, &conv);
-
-
-	end = clock(); //Measure time
-	double time_spent4 = ((double)(end - start))/(double)CLOCKS_PER_SEC;
-	//------------------------------------------------------------------------------------------
-
-
-
     return result;
 }
-
-
-
-
-
 
 int kalmanC(kalman_state* kstate, float measurement){
 	//Typical Kalman Filter update
@@ -304,32 +245,23 @@ int kalmanC(kalman_state* kstate, float measurement){
 	}
 }
 
-
-
-
-
 float* subtraction(float* differences, float* InputArray, float* OutputArray ,int Length){
     for(int position = 0; position < Length; position++){
-        float difference = InputArray[position] - OutputArray[position];
+        float difference = abs(InputArray[position] - OutputArray[position]);
         differences[position] = difference;
     }
     return differences;
 }
 
 float standardDeviation(float* differences, float Length){
-    float mean = 0;
-    for(int position = 0; position < Length; position++){
-        mean += differences[position]/Length;
-    }
+    float meanValue = mean(differences, Length);
     float sum = 0;
-    for(int position = 0; position < Length; position++){
-        sum += pow((differences[position] - mean), 2);
-    }
+    sum = summation2(differences,Length, meanValue);
     float standardDeviation = sqrt(sum/Length);
     return standardDeviation;
 }
 
-float correlation(float* InputArray, float* OutputArray, int Length){
+float correlation(float* correlationArray, float* InputArray, float* OutputArray, int Length){
     float correlation = 0;
     float inputMean = 0;
     float outputMean = 0;
@@ -338,36 +270,51 @@ float correlation(float* InputArray, float* OutputArray, int Length){
     float sum3 = 0;
     float sum4 = 0;
 
-    for(int position = 0; position < Length; position++){
-        inputMean += InputArray[position]/Length;
+    inputMean = mean(InputArray, Length);
+    outputMean = mean(OutputArray, Length);
+
+    for(int position = 0; position < Length; position++) {
+        sum1 += InputArray[position] - inputMean;
+        sum2 += OutputArray[position] - outputMean;
+        sum3 += pow((InputArray[position] - inputMean), 2);
+        sum4 += pow((OutputArray[position] - outputMean), 2);
+        correlation = (sum1 * sum2) / sqrt(sum3 * sum4);
+        correlationArray[position] = correlation;
     }
-    for(int position = 0; position < Length; position++){
-        outputMean += OutputArray[position]/Length;
-    }
-    for(int position = 0; position < Length; position++){
-        sum1 += (InputArray[position]-inputMean);
-    }
-    for(int position = 0; position < Length; position++){
-        sum2 += (OutputArray[position]-outputMean);
-    }
-    for(int position = 0; position < Length; position++){
-        sum3 += pow((InputArray[position]-inputMean),2);
-    }
-    for(int position = 0; position < Length; position++){
-        sum4 += pow((OutputArray[position]-outputMean),2);
-    }
-    return correlation = (sum1*sum2)/sqrt(sum3*sum4);
+    return correlation;
 }
 
-float convolution(float* InputArray, float* OutputArray, int Length){
+float convolution(float* convolutionArray, float* InputArray, float* OutputArray, int Length){
     float convolution = 0;
     for(int position = 0; position < Length; position++){
         convolution += InputArray[position]*OutputArray[position];
+        convolutionArray[position] = convolution;
     }
     return convolution;
 }
 
+float mean(float* array, int Length){
+    float mean = 0;
+    for(int position = 0; position < Length; position++){
+        mean += array[position]/Length;
+    }
+    return mean;
+}
 
+float summation(float* array, int Length, float mean){
+    float sum = 0;
+    for(int position = 0; position < Length; position++){
+        sum += (array[position]-mean);
+    }
+    return sum;
+};
+float summation2(float* array, int Length, float mean){
+    float sum = 0;
+    for(int position = 0; position < Length; position++){
+        sum += pow((array[position]-mean),2);
+    }
+    return sum;
+};
 
 
 
