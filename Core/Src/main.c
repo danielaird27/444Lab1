@@ -263,7 +263,7 @@ float standardDeviation(float* differences, float Length){
 }
 
 float correlation(float* correlationArray, float* InputArray, float* OutputArray, int Length){
-    float correlation = 0;
+/*    float correlation = 0;
     float inputMean = 0;
     float outputMean = 0;
     float sum1 = 0;
@@ -280,6 +280,12 @@ float correlation(float* correlationArray, float* InputArray, float* OutputArray
         sum3 += pow((InputArray[position] - inputMean), 2);
         sum4 += pow((OutputArray[position] - outputMean), 2);
         correlation = (sum1 * sum2) / sqrt(sum3 * sum4);
+        correlationArray[position] = correlation;
+    }*/
+
+    float correlation = 0;
+    for(int position = 0; position < Length; position++){
+    	correlation += InputArray[position]*OutputArray[(Length-1) - position];
         correlationArray[position] = correlation;
     }
     return correlation;
