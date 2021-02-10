@@ -31,7 +31,7 @@
 
 /* Private typedef -----------------------------------------------------------*/
 /* USER CODE BEGIN PTD */
-
+#define ITM_Port32(n) (*((volatile unsigned long *) (0xE0000000+4*n)))
 /* USER CODE END PTD */
 
 /* Private define ------------------------------------------------------------*/
@@ -52,6 +52,7 @@
 
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
+static void MX_GPIO_Init(void);
 /* USER CODE BEGIN PFP */
 
 
@@ -93,9 +94,8 @@ int kalmanC(kalman_state* kstate, float measurement);
  */
 float* subtraction(float* differences, float* InputArray, float* OutputArray ,int Length);
 float standardDeviation(float* differences, float Length);
-float correlation(float* InputArray, float* OutputArray, int Length);
-float convolution(float* InputArray, float* OutputArray, int Length);
-
+float correlation(float* correlationArray, float* InputArray, float* OutputArray, int Length);
+float convolution(float* convolutionArray, float* InputArray, float* OutputArray, int Length);
 
 
 
@@ -122,16 +122,24 @@ int Kalmanfilter(float* InputArray, float* OutputArray, kalman_state* kstate, in
 	 * The time values for each part are saved in time_spent1, time_spent2, time_spent3, and time_spent4
 	 */
 
+	//Saving initial kstate for reinitializing later
+	float q = kstate->q;
+	float r = kstate->r;
+	float x = kstate->x;
+	float p = kstate->p;
+	float k = kstate->k;
 	/*------------------------------------------------------------------------------------------
 	 * Generating outputs with assembly + calculating with C------------------------------------
 	 ------------------------------------------------------------------------------------------*/
 	int result;
+	ITM_Port32(31) = 1;
 	// Create the output array with the assembly function
-	clock_t start = clock(); //Measure time
+	uint32_t start = HAL_GetTick(); //Measure time
 	for(int position = 0; position < Length; position++){
 		result = kalmanASS(kstate, InputArray[position]);
         OutputArray[position] = kstate->x;
     }
+	ITM_Port32(31) = 2;
 
 	//NaN detection - if there was a NaN in the output, result will be -1
 	if (result == -1) {
@@ -139,23 +147,23 @@ int Kalmanfilter(float* InputArray, float* OutputArray, kalman_state* kstate, in
 	}
 
 	 // Subtraction
-	float differences[Length];
-	subtraction(differences, InputArray, OutputArray, Length);
+	float differences1[Length];
+	subtraction(differences1, InputArray, OutputArray, Length);
 
 	// Standard Deviation
-	float standardDeviationValue;
-	standardDeviationValue = standardDeviation(differences, Length);
+	float stdDev1;
+	stdDev1 = standardDeviation(differences1, Length);
 
 	// Correlation
-	float correlationCoefficient;
-	correlationCoefficient = correlation(InputArray, OutputArray, Length);
+	float corr1[Length];
+	correlation(corr1, InputArray, OutputArray, Length);
 
 	// Convolution
-	float convolutionValue;
-	convolutionValue = convolution(InputArray, OutputArray, Length);
+	float conv1[Length];
+	convolution(conv1, InputArray, OutputArray, Length);
 
-	clock_t end = clock(); //Measure time
-	double time_spent1 = ((double)(end - start))/(double)CLOCKS_PER_SEC;
+	uint32_t end = HAL_GetTick(); //Measure time
+	long time_spent1 = (long)(end - start);
 	//------------------------------------------------------------------------------------------
 
 
@@ -164,7 +172,12 @@ int Kalmanfilter(float* InputArray, float* OutputArray, kalman_state* kstate, in
 	 * Generating outputs with C + calculating with C-------------------------------------------
 	 -------------------------------------------------------------------------------------------*/
 	// Create the output array with the assembly function
-	start = clock(); //Measure time
+	kstate->q = q;
+	kstate->r = r;
+	kstate->x = x;
+	kstate->p = p;
+	kstate->k = k;
+	start = HAL_GetTick(); //Measure time
 	for(int position = 0; position < Length; position++){
 		result = kalmanC(kstate, InputArray[position]);
 		OutputArray[position] = kstate->x;
@@ -176,19 +189,23 @@ int Kalmanfilter(float* InputArray, float* OutputArray, kalman_state* kstate, in
 	}
 
 	 // Subtraction
-	subtraction(differences, InputArray, OutputArray, Length);
+	float differences2[Length];
+	subtraction(differences2, InputArray, OutputArray, Length);
 
 	// Standard Deviation
-	standardDeviationValue = standardDeviation(differences, Length);
+	float stdDev2;
+	stdDev2 = standardDeviation(differences2, Length);
 
 	// Correlation
-	correlationCoefficient = correlation(InputArray, OutputArray, Length);
+	float corr2[Length];
+	correlation(corr2, InputArray, OutputArray, Length);
 
 	// Convolution
-	convolutionValue = convolution(InputArray, OutputArray, Length);
+	float conv2[Length];
+	convolution(conv2, InputArray, OutputArray, Length);
 
-	end = clock(); //Measure time
-	double time_spent2 = ((double)(end - start))/(double)CLOCKS_PER_SEC;
+	end = HAL_GetTick(); //Measure time
+	double time_spent2 = (double)(end - start);
 	//------------------------------------------------------------------------------------------
 
 
@@ -197,7 +214,12 @@ int Kalmanfilter(float* InputArray, float* OutputArray, kalman_state* kstate, in
 	 * Generating outputs with assembly + calculating with CMSIS-DSP----------------------------
 	 ------------------------------------------------------------------------------------------*/
 	// Create the output array with the assembly function
-	start = clock(); //Measure time
+	kstate->q = q;
+	kstate->r = r;
+	kstate->x = x;
+	kstate->p = p;
+	kstate->k = k;
+	start = HAL_GetTick(); //Measure time
 	for(int position = 0; position < Length; position++){
 		int result = kalmanASS(kstate, InputArray[position]);
 		OutputArray[position] = kstate->x;
@@ -209,27 +231,24 @@ int Kalmanfilter(float* InputArray, float* OutputArray, kalman_state* kstate, in
 	}
 
 	//Subtraction
-	arm_sub_f32(InputArray, OutputArray, differences, Length);
-
-	//Mean
-	float mean;
-	arm_mean_f32(differences, Length, &mean);
+	float differences3[Length];
+	arm_sub_f32(InputArray, OutputArray, differences3, Length);
 
 	//Standard Deviation
-	float stddev;
-	arm_std_f32(differences, Length, &stddev);
+	float stdDev3;
+	arm_std_f32(differences3, Length, &stdDev3);
 
 	//Correlation
-	float corr[(2*Length - 1)];
-	arm_correlate_f32(InputArray, Length, OutputArray, Length, &corr);
+	float corr3[(2*Length - 1)];
+	arm_correlate_f32(InputArray, Length, OutputArray, Length, &corr3);
 
 	//Convolution
-	float conv[(2*Length - 1)];
-	arm_conv_f32(InputArray, Length, OutputArray, Length, &conv);
+	float conv3[(2*Length - 1)];
+	arm_conv_f32(InputArray, Length, OutputArray, Length, &conv3);
 
 
-	end = clock(); //Measure time
-	double time_spent3 = ((double)(end - start))/(double)CLOCKS_PER_SEC;
+	end = HAL_GetTick(); //Measure time
+	double time_spent3 = (double)(end - start);
 	//------------------------------------------------------------------------------------------
 
 
@@ -238,9 +257,14 @@ int Kalmanfilter(float* InputArray, float* OutputArray, kalman_state* kstate, in
 	 * Generating outputs with C + calculating with CMSIS-DSP----------------------------
 	 ------------------------------------------------------------------------------------------*/
 	// Create the output array with the assembly function
-	start = clock(); //Measure time
+	kstate->q = q;
+	kstate->r = r;
+	kstate->x = x;
+	kstate->p = p;
+	kstate->k = k;
+	start = HAL_GetTick(); //Measure time
 	for(int position = 0; position < Length; position++){
-		int result = kalmanASS(kstate, InputArray[position]);
+		int result = kalmanC(kstate, InputArray[position]);
 		OutputArray[position] = kstate->x;
 	}
 
@@ -250,23 +274,24 @@ int Kalmanfilter(float* InputArray, float* OutputArray, kalman_state* kstate, in
 	}
 
 	//Subtraction
-	arm_sub_f32(InputArray, OutputArray, differences, Length);
-
-	//Mean
-	arm_mean_f32(differences, Length, &mean);
+	float differences4[Length];
+	arm_sub_f32(InputArray, OutputArray, differences4, Length);
 
 	//Standard Deviation
-	arm_std_f32(differences, Length, &stddev);
+	float stdDev4[Length];
+	arm_std_f32(differences4, Length, &stdDev4);
 
 	//Correlation
-	arm_correlate_f32(InputArray, Length, OutputArray, Length, &corr);
+	float corr4[(2*Length - 1)];
+	arm_correlate_f32(InputArray, Length, OutputArray, Length, &corr4);
 
 	//Convolution
-	arm_conv_f32(InputArray, Length, OutputArray, Length, &conv);
+	float conv4[(2*Length - 1)];
+	arm_conv_f32(InputArray, Length, OutputArray, Length, &conv4);
 
 
-	end = clock(); //Measure time
-	double time_spent4 = ((double)(end - start))/(double)CLOCKS_PER_SEC;
+	end = HAL_GetTick(); //Measure time
+	double time_spent4 = (double)(end - start);
 	//------------------------------------------------------------------------------------------
 
 
@@ -329,40 +354,20 @@ float standardDeviation(float* differences, float Length){
     return standardDeviation;
 }
 
-float correlation(float* InputArray, float* OutputArray, int Length){
+float correlation(float* correlationArray, float* InputArray, float* OutputArray, int Length){
     float correlation = 0;
-    float inputMean = 0;
-    float outputMean = 0;
-    float sum1 = 0;
-    float sum2 = 0;
-    float sum3 = 0;
-    float sum4 = 0;
-
     for(int position = 0; position < Length; position++){
-        inputMean += InputArray[position]/Length;
+    	correlation += InputArray[position]*OutputArray[(Length-1) - position];
+        correlationArray[position] = correlation;
     }
-    for(int position = 0; position < Length; position++){
-        outputMean += OutputArray[position]/Length;
-    }
-    for(int position = 0; position < Length; position++){
-        sum1 += (InputArray[position]-inputMean);
-    }
-    for(int position = 0; position < Length; position++){
-        sum2 += (OutputArray[position]-outputMean);
-    }
-    for(int position = 0; position < Length; position++){
-        sum3 += pow((InputArray[position]-inputMean),2);
-    }
-    for(int position = 0; position < Length; position++){
-        sum4 += pow((OutputArray[position]-outputMean),2);
-    }
-    return correlation = (sum1*sum2)/sqrt(sum3*sum4);
+    return correlation;
 }
 
-float convolution(float* InputArray, float* OutputArray, int Length){
+float convolution(float* convolutionArray, float* InputArray, float* OutputArray, int Length){
     float convolution = 0;
     for(int position = 0; position < Length; position++){
         convolution += InputArray[position]*OutputArray[position];
+        convolutionArray[position] = convolution;
     }
     return convolution;
 }
@@ -400,6 +405,7 @@ int main(void)
   /* USER CODE END SysInit */
 
   /* Initialize all configured peripherals */
+  MX_GPIO_Init();
   /* USER CODE BEGIN 2 */
 
 
@@ -410,6 +416,7 @@ int main(void)
   float InputArray[] = TEST_ARRAY;
   int Length = (int)sizeof(InputArray)/sizeof(float);
   float OutputArray[Length];
+
 
   int result = Kalmanfilter(InputArray, OutputArray, &kstate, Length);
 
@@ -475,6 +482,20 @@ void SystemClock_Config(void)
   {
     Error_Handler();
   }
+}
+
+/**
+  * @brief GPIO Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_GPIO_Init(void)
+{
+
+  /* GPIO Ports Clock Enable */
+  __HAL_RCC_GPIOA_CLK_ENABLE();
+  __HAL_RCC_GPIOB_CLK_ENABLE();
+
 }
 
 /* USER CODE BEGIN 4 */
